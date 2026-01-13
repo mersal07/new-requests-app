@@ -587,7 +587,7 @@
     <div class="login-backdrop" id="login-backdrop">
         <div class="login">
             <h3>تسجيل الدخول</h3>
-            <div class="hint">أدوار: <b>Editor</b> للتحرير — <b>Closer</b> للغلق فقط.</div>
+            <div class="hint">أدوار: <b>Team Leader</b> للتحرير — <b>Closer</b> للغلق فقط.</div>
             <div class="row">
                 <label>اسم المستخدم</label>
                 <input id="lg-user" autocomplete="username" />
@@ -622,14 +622,14 @@
         const AUTH_USERS = [
             { u: 'admin', p: '1234', role: 'admin' },
             { u: 'closer', p: 'close123', role: 'closer' },
-            { u: 'khaled', p: 'k123', role: 'tech' },
+            { u: 'khaled', p: 'k123', role: 'team_leader' },
             { u: 'south', p: 's123', role: 'group' },
             { u: 'middle', p: 'm123', role: 'group' },
             { u: 'north', p: 'n123', role: 'group' },
             { u: 'group1', p: 'g123', role: 'group' }
         ];
         const SESSION_KEY = 'reqs_login_user_v2';
-        const TECHNICIAN_EDITABLE_COLS = ['notes', 'msan', 'cabinet', 'dp', 'type'];
+        const TEAM_LEADER_EDITABLE_COLS = ['notes', 'msan', 'cabinet', 'dp', 'type'];
 
         /* ===== Utils ===== */
         const Q = (s, el = document) => el.querySelector(s);
@@ -739,7 +739,7 @@
         let currentUser = null;
         let canEdit = false;
         let canClose = false;
-        let isTech = false;
+        let isTeamLeader = false;
         let isGroup = false;
         let selectedRowEl = null;
         let activeLocRow = null;
@@ -807,10 +807,10 @@
             // Row-level Security
             if (currentUser && !isAdmin) {
                 const u = (currentUser.u || '').toLowerCase().trim();
-                if (isTech) {
+                if (isTeamLeader) {
                     filtered = filtered.filter(r => {
-                        const t = val(r, 'tech').toLowerCase().trim();
-                        return t === u || t.includes(u);
+                        const tl = val(r, 'team_leader').toLowerCase().trim();
+                        return tl === u || tl.includes(u);
                     });
                 }
                 // Group role now sees all rows (No filter)
@@ -848,7 +848,7 @@
                 'customer loc', 'dp loc',
                 'customer loc lat', 'customer loc long',
                 'dp loc lat', 'dp loc long',
-                'comment', 'solved', 'solved_at', 'solved_by', 'closed', 'tech'
+                'comment', 'solved', 'solved_at', 'solved_by', 'closed', 'team_leader'
             ];
 
             // Add missing columns (case-insensitive check)
@@ -898,7 +898,7 @@
                     const v = r[lc] ?? val(r, c);
                     const ro = (canEdit || isGroup) ? '' : 'readonly';
                     return `<td><textarea data-id="${r.__id}" data-col="${lc}" ${ro}>${(v + '').replace(/</g, '&lt;')}</textarea></td>`;
-                } else if (TECHNICIAN_EDITABLE_COLS.includes(lc)) {
+                } else if (TEAM_LEADER_EDITABLE_COLS.includes(lc)) {
                     const v = r[lc] ?? val(r, c);
                     const isAdmin = currentUser && (currentUser.u === 'admin' || currentUser.isAdmin === true);
                     const ro = (canEdit || isAdmin) ? '' : 'readonly';
@@ -908,7 +908,7 @@
                     const pill = isOk ? `<span class="pill ok">ok</span>` : `<span class="pill">—</span>`;
                     const ro = (canEdit || isGroup);
                     const dis = ro ? '' : 'disabled';
-                    const tt = ro ? 'تبديل حالة الحل' : 'غير مخول (Editor/Group فقط)';
+                    const tt = ro ? 'تبديل حالة الحل' : 'غير مخول (Team Leader/Group فقط)';
                     return `<td>
                   <div class="solved-cell">
                     <input type="checkbox" data-id="${r.__id}" data-col="solved" ${isOk ? 'checked' : ''} ${dis} title="${tt}">
@@ -1337,9 +1337,9 @@
             try { const s = localStorage.getItem(SESSION_KEY); if (s) currentUser = JSON.parse(s); } catch { }
             if (currentUser) {
                 const r = currentUser.role;
-                canEdit = (r === 'admin' || r === 'tech');
+                canEdit = (r === 'admin' || r === 'team_leader');
                 canClose = (r === 'admin' || r === 'closer');
-                isTech = (r === 'tech');
+                isTeamLeader = (r === 'team_leader');
                 isGroup = (r === 'group');
                 const badge = Q('#user-badge');
                 if (r === 'guest') badge.textContent = `👀 ${currentUser.u} (قراءة فقط)`;
@@ -1375,9 +1375,9 @@
                 }
 
                 const r = currentUser.role;
-                canEdit = (r === 'admin' || r === 'tech');
+                canEdit = (r === 'admin' || r === 'team_leader');
                 canClose = (r === 'admin' || r === 'closer');
-                isTech = (r === 'tech');
+                isTeamLeader = (r === 'team_leader');
                 isGroup = (r === 'group');
 
                 const badge = Q('#user-badge');
