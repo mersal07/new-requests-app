@@ -688,10 +688,21 @@
         async function readFromDrive(id) {
             const url = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(id)}`;
             const resp = await fetch(url, { cache: 'no-store' });
-            if (!resp.ok) throw new Error('Failed to fetch file from Drive');
+            if (!resp.ok) throw new Error('Failed to fetch from script: HTTP ' + resp.status);
 
-            const result = await resp.json();
-            if (result.error) throw new Error(result.error);
+            const text = await resp.text();
+            let result;
+            try {
+                result = JSON.parse(text);
+            } catch (e) {
+                // If parsing fails, the script might be returning the old CSV text or a text error
+                if (text.startsWith('<!doctype') || text.startsWith('<html')) {
+                    throw new Error('Script returned HTML (Login page). Please check "Who has access: Anyone" in deployment.');
+                }
+                throw new Error('Script returned non-JSON data: ' + text.substring(0, 100));
+            }
+
+            if (result.error) throw new Error('Apps Script Error: ' + result.error);
 
             // Handle base64 from Apps Script
             const base64 = result.base64;
