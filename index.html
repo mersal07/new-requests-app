@@ -699,7 +699,7 @@
                 if (text.startsWith('<!doctype') || text.startsWith('<html')) {
                     throw new Error('Script returned HTML (Login page). Please check "Who has access: Anyone" in deployment.');
                 }
-                throw new Error('Script returned non-JSON data: ' + text.substring(0, 100));
+                throw new Error('Script returned non-JSON data. This often happens if the Script URL is old or Permissions are wrong. \n\nContent starts with: ' + text.substring(0, 200));
             }
 
             if (result.error) throw new Error('Apps Script Error: ' + result.error);
