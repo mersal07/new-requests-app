@@ -610,6 +610,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <script>
         /* ===== CONFIG ===== */
@@ -683,38 +684,47 @@
             return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
         }
 
-        // ---- CSV helpers ----
-        function parseCSV(csvText) {
-            const rows = []; let i = 0, field = '', row = [], inQ = false;
-            while (i < csvText.length) {
-                const c = csvText[i];
-                if (inQ) { if (c === '"') { if (csvText[i + 1] === '"') { field += '"'; i++; } else inQ = false; } else field += c; }
-                else {
-                    if (c === '"') inQ = true; else if (c === ',') { row.push(field); field = ''; }
-                    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-                    else if (c !== '\r') { field += c; }
-                }
-                i++;
-            }
-            if (field.length || row.length) { row.push(field); rows.push(row); }
-            const headers = rows.shift() || [];
-            return rows.map(r => { const o = {}; headers.forEach((h, idx) => o[h] = r[idx] ?? ''); return o; });
-        }
-        function toCSV(rows, headerOrder) {
-            const esc = v => { let s = v == null ? '' : String(v); if (s.includes('"')) s = s.replace(/"/g, '""'); if (/[",\n\r]/.test(s)) s = `"${s}"`; return s; };
-            const headers = headerOrder || Object.keys(rows[0] || {});
-            const lines = [headers.map(esc).join(',')];
-            for (const r of rows) lines.push(headers.map(h => esc(r[h])).join(','));
-            return lines.join('\n');
-        }
+        // ---- Excel helpers using SheetJS ----
         async function readFromDrive(id) {
             const url = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(id)}`;
-            const txt = await fetch(url, { cache: 'no-store' }).then(r => r.text());
-            try { return JSON.parse(txt); } catch { return parseCSV(txt); }
+            const resp = await fetch(url, { cache: 'no-store' });
+            if (!resp.ok) throw new Error('Failed to fetch file from Drive');
+
+            const result = await resp.json();
+            if (result.error) throw new Error(result.error);
+
+            // Handle base64 from Apps Script
+            const base64 = result.base64;
+            const workbook = XLSX.read(base64, { type: 'base64' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+
+            // Convert to JSON
+            const data = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+            // Store header order from the Excel sheet
+            if (data.length > 0) {
+                headerOrder = XLSX.utils.sheet_to_json(sheet, { header: 1 })[0];
+            }
+
+            return data;
         }
-        async function writeToDrive(id, text) {
+
+        async function writeToDrive(id, rows) {
+            // Create a new workbook and add the data
+            const worksheet = XLSX.utils.json_to_sheet(rows, { header: headerOrder });
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Requests");
+
+            // Write as base64
+            const b64 = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
+
             const url = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(id)}&op=overwrite${API_KEY ? '&key=' + encodeURIComponent(API_KEY) : ''}`;
-            const resp = await fetch(url, { method: 'POST', body: text });
+            const resp = await fetch(url, {
+                method: 'POST',
+                body: JSON.stringify({ base64: b64 })
+            });
+
             const t = await resp.text();
             if (!resp.ok || (t && t.startsWith('ERROR'))) throw new Error(t || ('HTTP ' + resp.status));
             return true;
@@ -1205,9 +1215,9 @@
             ];
             for (const k of extraCols) if (!headers.includes(k)) headers.push(k);
             const material = rows.map(r => { const o = {}; headers.forEach(h => o[h] = r[h] ?? ''); return o; });
-            const csv = toCSV(material, headers);
+
             Q('#stat').textContent = 'يتم الحفظ...';
-            await writeToDrive(FILE_ID, csv);
+            await writeToDrive(FILE_ID, material);
             Q('#stat').textContent = 'تم الحفظ على Google Drive';
         }
 
