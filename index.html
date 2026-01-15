@@ -687,7 +687,15 @@
         // ---- Excel helpers using SheetJS ----
         async function readFromDrive(id) {
             const url = `${APPS_SCRIPT_URL}?id=${encodeURIComponent(id)}`;
-            const resp = await fetch(url, { cache: 'no-store' });
+            console.log('Fetching from URL:', url);
+            let resp;
+            try {
+                resp = await fetch(url, { cache: 'no-store' });
+            } catch (networkError) {
+                console.error('Fetch network error:', networkError);
+                throw new Error('Network error (Failed to fetch). This usually means:\n1. The Script URL is wrong.\n2. You are not logged in or the script permissions are not set to "Anyone".\n3. CORS block because of a redirect to a login page.');
+            }
+
             if (!resp.ok) throw new Error('Failed to fetch from script: HTTP ' + resp.status);
 
             const text = await resp.text();
